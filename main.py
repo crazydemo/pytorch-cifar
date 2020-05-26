@@ -12,7 +12,7 @@ import os
 import argparse
 
 from models import *
-from utils import progress_bar
+from utils import progress_bar, WarmUpLR
 from cifar10 import *
 
 
@@ -61,7 +61,7 @@ classes = ('plane', 'car', 'bird', 'cat', 'deer',
 
 # Model
 print('==> Building model..')
-net = VGG(args.net)
+net = VGG(args.net[:-2])
 # net = ResNet18()
 # net = PreActResNet18()
 # net = GoogLeNet()
@@ -92,6 +92,9 @@ if args.resume:
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.SGD(net.parameters(), lr=args.lr,
                       momentum=0.9, weight_decay=5e-4)
+train_scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[60, 120, 160], gamma=0.2) #learning rate decay
+iter_per_epoch = len(trainloader)
+warmup_scheduler = WarmUpLR(optimizer, iter_per_epoch * 1)
 
 
 # Training
@@ -101,7 +104,11 @@ def train(epoch):
     train_loss = 0
     correct = 0
     total = 0
+    if epoch > 0:
+        train_scheduler.step(epoch)
     for batch_idx, (inputs, targets) in enumerate(trainloader):
+        if epoch <= 0:
+            warmup_scheduler.step()
         inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
         outputs = net(inputs)
@@ -114,8 +121,8 @@ def train(epoch):
         total += targets.size(0)
         correct += predicted.eq(targets).sum().item()
 
-        progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
-                     % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
+        progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d) | lr: %.6f'
+                     % (train_loss/(batch_idx+1), 100.*correct/total, correct, total, optimizer.param_groups[0]['lr']))
 
 
 def test():

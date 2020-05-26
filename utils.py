@@ -10,6 +10,7 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.init as init
+from torch.optim.lr_scheduler import _LRScheduler
 
 
 def get_mean_and_std(dataset):
@@ -123,3 +124,21 @@ def format_time(seconds):
     if f == '':
         f = '0ms'
     return f
+
+
+class WarmUpLR(_LRScheduler):
+    """warmup_training learning rate scheduler
+    Args:
+        optimizer: optimzier(e.g. SGD)
+        total_iters: totoal_iters of warmup phase
+    """
+
+    def __init__(self, optimizer, total_iters, last_epoch=-1):
+        self.total_iters = total_iters
+        super().__init__(optimizer, last_epoch)
+
+    def get_lr(self):
+        """we will use the first m batches, and set the learning
+        rate to base_lr * m / total_iters
+        """
+        return [base_lr * self.last_epoch / (self.total_iters + 1e-8) for base_lr in self.base_lrs]
